@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	socks5 "github.com/h12w/go-socks5"
+	"github.com/h12w/go-socks5"
 	"github.com/phayes/freeport"
 )
 
@@ -91,6 +91,29 @@ func TestSocks5Anonymous(t *testing.T) {
 	}
 }
 
+func TestSocks5AnonymousWithConn(t *testing.T) {
+	socksTestPort := newTestSocksServer(false)
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", socksTestPort), 5*time.Second)
+	if err != nil {
+		t.Fatalf("dial socks5 proxy failed: %v", err)
+	}
+	dialSocksProxy := DialWithConn(fmt.Sprintf("socks5://127.0.0.1:%d?timeout=5s", socksTestPort), conn)
+	tr := &http.Transport{Dial: dialSocksProxy}
+	httpClient := &http.Client{Transport: tr}
+	resp, err := httpClient.Get(fmt.Sprintf("http://localhost" + httpTestServer.Addr))
+	if err != nil {
+		t.Fatalf("expect response hello but got %s", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	if string(respBody) != "hello" {
+		t.Fatalf("expect response hello but got %s", respBody)
+	}
+}
+
 func TestSocks5Auth(t *testing.T) {
 	socksTestPort := newTestSocksServer(true)
 	dialSocksProxy := Dial(fmt.Sprintf("socks5://test_user:test_pass@127.0.0.1:%d?timeout=5s", socksTestPort))
@@ -115,5 +138,5 @@ func tcpReady(port int, timeout time.Duration) {
 	if err != nil {
 		panic(err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }

@@ -8,18 +8,11 @@ import (
 
 func (cfg *config) dialSocks4(targetAddr string) (_ net.Conn, err error) {
 	socksType := cfg.Proto
-	proxy := cfg.Host
 
-	// dial TCP
-	conn, err := net.DialTimeout("tcp", proxy, cfg.Timeout)
+	conn, err := cfg.internalDial()
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil {
-			conn.Close()
-		}
-	}()
 
 	// connection request
 	host, port, err := splitHostPort(targetAddr)

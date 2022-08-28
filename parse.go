@@ -3,6 +3,7 @@ package socks
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"time"
 )
@@ -13,6 +14,7 @@ type (
 		Host    string
 		Auth    *auth
 		Timeout time.Duration
+		conn    net.Conn
 	}
 	auth struct {
 		Username string

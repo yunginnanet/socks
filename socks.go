@@ -6,6 +6,7 @@
 Package socks implements a SOCKS (SOCKS4, SOCKS4A and SOCKS5) proxy client.
 
 A complete example using this package:
+
 	package main
 
 	import (
@@ -43,6 +44,7 @@ package socks // import "h12.io/socks"
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 // Constants to choose which version of SOCKS protocol to use.
@@ -51,6 +53,19 @@ const (
 	SOCKS4A
 	SOCKS5
 )
+
+// DialWithConn returns the dial function to be used in http.Transport object.
+// Argument proxyURI should be in the format: "socks5://user:password@127.0.0.1:1080?timeout=5s".
+// The protocol could be socks5, socks4 and socks4a. DialWithConn will use the given connection
+// to communicate with the proxy server.
+func DialWithConn(proxyURI string, conn net.Conn) func(string, string) (net.Conn, error) {
+	cfg, err := parse(proxyURI)
+	if err != nil {
+		return dialError(err)
+	}
+	cfg.conn = conn
+	return cfg.dialFunc()
+}
 
 // Dial returns the dial function to be used in http.Transport object.
 // Argument proxyURI should be in the format: "socks5://user:password@127.0.0.1:1080?timeout=5s".
@@ -70,22 +85,30 @@ func DialSocksProxy(socksType int, proxy string) func(string, string) (net.Conn,
 	return (&config{Proto: socksType, Host: proxy}).dialFunc()
 }
 
-func (c *config) dialFunc() func(string, string) (net.Conn, error) {
-	switch c.Proto {
+func (cfg *config) dialFunc() func(string, string) (net.Conn, error) {
+	switch cfg.Proto {
 	case SOCKS5:
 		return func(_, targetAddr string) (conn net.Conn, err error) {
-			return c.dialSocks5(targetAddr)
+			return cfg.dialSocks5(targetAddr)
 		}
 	case SOCKS4, SOCKS4A:
 		return func(_, targetAddr string) (conn net.Conn, err error) {
-			return c.dialSocks4(targetAddr)
+			return cfg.dialSocks4(targetAddr)
 		}
 	}
-	return dialError(fmt.Errorf("unknown SOCKS protocol %v", c.Proto))
+	return dialError(fmt.Errorf("unknown SOCKS protocol %v", cfg.Proto))
 }
 
 func dialError(err error) func(string, string) (net.Conn, error) {
 	return func(_, _ string) (net.Conn, error) {
 		return nil, err
 	}
+}
+
+func (cfg *config) internalDial() (conn net.Conn, err error) {
+	if cfg.conn != nil {
+		err = cfg.conn.SetDeadline(time.Now().Add(cfg.Timeout))
+		return cfg.conn, nil
+	}
+	return net.DialTimeout("tcp", cfg.Host, cfg.Timeout)
 }

@@ -6,18 +6,10 @@ import (
 )
 
 func (cfg *config) dialSocks5(targetAddr string) (_ net.Conn, err error) {
-	proxy := cfg.Host
-
-	// dial TCP
-	conn, err := net.DialTimeout("tcp", proxy, cfg.Timeout)
+	conn, err := cfg.internalDial()
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil {
-			conn.Close()
-		}
-	}()
 
 	var req requestBuilder
 
