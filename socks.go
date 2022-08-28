@@ -10,7 +10,7 @@ A complete example using this package:
 	package main
 
 	import (
-		"h12.io/socks"
+		"git.tcp.direct/kayos/socks"
 		"fmt"
 		"net/http"
 		"io/ioutil"
@@ -39,7 +39,7 @@ A complete example using this package:
 		return
 	}
 */
-package socks // import "h12.io/socks"
+package socks // import "git.tcp.direct/kayos/socks"
 
 import (
 	"fmt"
