@@ -48,6 +48,8 @@ import (
 )
 
 // Constants to choose which version of SOCKS protocol to use.
+//
+//goland:noinspection GoNameStartsWithPackageName
 const (
 	SOCKS4 = iota
 	SOCKS4A
@@ -82,21 +84,21 @@ func Dial(proxyURI string) func(string, string) (net.Conn, error) {
 // Argument socksType should be one of SOCKS4, SOCKS4A and SOCKS5.
 // Argument proxy should be in this format "127.0.0.1:1080".
 func DialSocksProxy(socksType int, proxy string) func(string, string) (net.Conn, error) {
-	return (&config{Proto: socksType, Host: proxy}).dialFunc()
+	return (&session{Proto: socksType, Host: proxy}).dialFunc()
 }
 
-func (cfg *config) dialFunc() func(string, string) (net.Conn, error) {
-	switch cfg.Proto {
+func (sesh *session) dialFunc() func(string, string) (net.Conn, error) {
+	switch sesh.Proto {
 	case SOCKS5:
 		return func(_, targetAddr string) (conn net.Conn, err error) {
-			return cfg.dialSocks5(targetAddr)
+			return sesh.dialSocks5(targetAddr)
 		}
 	case SOCKS4, SOCKS4A:
 		return func(_, targetAddr string) (conn net.Conn, err error) {
-			return cfg.dialSocks4(targetAddr)
+			return sesh.dialSocks4(targetAddr)
 		}
 	}
-	return dialError(fmt.Errorf("unknown SOCKS protocol %v", cfg.Proto))
+	return dialError(fmt.Errorf("unknown SOCKS protocol %v", sesh.Proto))
 }
 
 func dialError(err error) func(string, string) (net.Conn, error) {
@@ -105,10 +107,16 @@ func dialError(err error) func(string, string) (net.Conn, error) {
 	}
 }
 
-func (cfg *config) internalDial() (conn net.Conn, err error) {
-	if cfg.conn != nil {
-		err = cfg.conn.SetDeadline(time.Now().Add(cfg.Timeout))
-		return cfg.conn, nil
+func (sesh *session) internalDial() (conn net.Conn, err error) {
+	// fmt.Printf("Dialing %s\n", sesh.Host)
+	if sesh.conn == nil {
+		return net.DialTimeout("tcp", sesh.Host, sesh.Timeout)
 	}
-	return net.DialTimeout("tcp", cfg.Host, cfg.Timeout)
+	if sesh.Timeout > 0 {
+		if err = sesh.conn.SetDeadline(time.Now().Add(sesh.Timeout)); err != nil {
+			return nil, err
+		}
+	}
+	// fmt.Printf("Using existing connection: %v(local)->%v(remote)\n", sesh.conn.LocalAddr(), sesh.conn.RemoteAddr())
+	return sesh.conn, nil
 }

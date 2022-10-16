@@ -26,6 +26,9 @@ func httpTestServer(t *testing.T) *http.Server {
 	s := &http.Server{
 		Addr: ":" + strconv.Itoa(httpTestPort),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// fmt.Printf("http test server: %v->%v", req.RemoteAddr, req.Host)
+			// spew.Dump(req.Header)
+			// spew.Dump(req.Body)
 			if _, err = w.Write([]byte("hello")); err != nil {
 				t.Fatalf("write response failed: %v", err)
 			}
@@ -44,7 +47,7 @@ func httpTestServer(t *testing.T) *http.Server {
 	return s
 }
 
-func newTestSocksServer(withAuth bool) (port int) {
+func newTestSocksServer(withAuth bool, t *testing.T) (port int) {
 	authenticator := socks5.Authenticator(socks5.NoAuthAuthenticator{})
 	if withAuth {
 		authenticator = socks5.UserPassAuthenticator{
@@ -66,13 +69,16 @@ func newTestSocksServer(withAuth bool) (port int) {
 	}
 
 	socksTestPort, err := freeport.GetFreePort()
+	t.Logf("socks test server port: %d", socksTestPort)
+
 	if err != nil {
 		panic(err)
 	}
 
 	go func() {
 		if err = srv.ListenAndServe("tcp", "0.0.0.0:"+strconv.Itoa(socksTestPort)); err != nil {
-			panic(err)
+			t.Errorf("listen and serve failed: %v", err)
+			return
 		}
 	}()
 	runtime.Gosched()
@@ -88,7 +94,7 @@ func TestSocks(t *testing.T) {
 	}
 
 	t.Run("TestSocks5Anonymous", func(t *testing.T) {
-		socksTestPort := newTestSocksServer(false)
+		socksTestPort := newTestSocksServer(false, t)
 		dialSocksProxy := Dial(fmt.Sprintf("socks5://127.0.0.1:%d?timeout=5s", socksTestPort))
 		tr := &http.Transport{Dial: dialSocksProxy}
 		httpClient := &http.Client{Transport: tr}
@@ -108,7 +114,7 @@ func TestSocks(t *testing.T) {
 		}
 	})
 	t.Run("TestSocks5AnonymousWithConn", func(t *testing.T) {
-		socksTestPort := newTestSocksServer(false)
+		socksTestPort := newTestSocksServer(false, t)
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", socksTestPort), 5*time.Second)
 		if err != nil {
 			t.Fatalf("dial socks5 proxy failed: %v", err)
@@ -133,7 +139,7 @@ func TestSocks(t *testing.T) {
 	})
 
 	t.Run("TestSocks5Auth", func(t *testing.T) {
-		socksTestPort := newTestSocksServer(true)
+		socksTestPort := newTestSocksServer(true, t)
 		dialSocksProxy := Dial(fmt.Sprintf("socks5://test_user:test_pass@127.0.0.1:%d?timeout=5s", socksTestPort))
 		tr := &http.Transport{Dial: dialSocksProxy}
 		httpClient := &http.Client{Transport: tr}

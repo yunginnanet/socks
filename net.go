@@ -1,45 +1,68 @@
 package socks
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"time"
+
+	"git.tcp.direct/kayos/common/pool"
 )
 
+var bufs = pool.NewBufferFactory()
+
+func newRequestBuilder() *requestBuilder {
+	return &requestBuilder{bufs.Get()}
+}
+
 type requestBuilder struct {
-	bytes.Buffer
+	*pool.Buffer
 }
 
-func (b *requestBuilder) add(data ...byte) {
-	_, _ = b.Write(data)
+func (b *requestBuilder) final() []byte {
+	defer bufs.MustPut(b.Buffer)
+	return b.MustBytes()
 }
 
-func (cfg *config) sendReceive(conn net.Conn, req []byte) (resp []byte, err error) {
-	if cfg.Timeout > 0 {
-		if err := conn.SetWriteDeadline(time.Now().Add(cfg.Timeout)); err != nil {
+func (sesh *session) sendReceive(conn net.Conn, req []byte) (resp []byte, err error) {
+	// fmt.Printf("sendReceive: %v->%v\n", conn.LocalAddr(), conn.RemoteAddr())
+	// spew.Dump(req)
+	if sesh.Timeout > 0 {
+		if err = conn.SetWriteDeadline(time.Now().Add(sesh.Timeout)); err != nil {
 			return nil, err
 		}
 	}
+	// fmt.Printf("sendReceive write: %v->%v\n", conn.LocalAddr(), conn.RemoteAddr())
+	// var n int
+	// n, err = conn.Write(req)
 	_, err = conn.Write(req)
 	if err != nil {
 		return
 	}
-	resp, err = cfg.readAll(conn)
+	// fmt.Printf("sendReceive write: %v->%v, %d bytes\n", conn.LocalAddr(), conn.RemoteAddr(), n)
+
+	// fmt.Printf("sendReceive read: %v->%v\n", conn.LocalAddr(), conn.RemoteAddr())
+	resp, err = sesh.readAll(conn)
 	return
 }
 
-func (cfg *config) readAll(conn net.Conn) (resp []byte, err error) {
-	resp = make([]byte, 1024)
-	if cfg.Timeout > 0 {
-		if err := conn.SetReadDeadline(time.Now().Add(cfg.Timeout)); err != nil {
+var bufPool = &sync.Pool{
+	New: func() any { return make([]byte, 1024) },
+}
+
+func (sesh *session) readAll(conn net.Conn) ([]byte, error) {
+	resp := bufPool.Get().([]byte)
+	defer bufPool.Put(resp)
+
+	if sesh.Timeout > 0 {
+		if err := conn.SetReadDeadline(time.Now().Add(sesh.Timeout)); err != nil {
 			return nil, err
 		}
 	}
+
 	n, err := conn.Read(resp)
-	resp = resp[:n]
-	return
+	return resp[:n], err
 }
 
 func lookupIPv4(host string) (net.IP, error) {

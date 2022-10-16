@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-func (cfg *config) dialSocks4(targetAddr string) (_ net.Conn, err error) {
-	socksType := cfg.Proto
+func (sesh *session) dialSocks4(targetAddr string) (_ net.Conn, err error) {
+	socksType := sesh.Proto
 
-	conn, err := cfg.internalDial()
+	conn, err := sesh.internalDial()
 	if err != nil {
 		return nil, err
 	}
@@ -26,19 +26,26 @@ func (cfg *config) dialSocks4(targetAddr string) (_ net.Conn, err error) {
 			return nil, err
 		}
 	}
-	req := []byte{
-		4,                          // version number
-		1,                          // command CONNECT
-		byte(port >> 8),            // higher byte of destination port
-		byte(port),                 // lower byte of destination port (big endian)
-		ip[0], ip[1], ip[2], ip[3], // special invalid IP address to indicate the host name is provided
-		0, // user id is empty, anonymous proxy only
-	}
+	req := newRequestBuilder()
+	req.MustWriteByte(4)               // socks version 4
+	req.MustWriteByte(1)               // command 1 (CONNECT)
+	req.MustWriteByte(byte(port >> 8)) // higher byte of destination port
+	req.MustWriteByte(byte(port))      // lower byte of destination port (big endian)
+
+	// target IP address
+	req.MustWriteByte(ip[0])
+	req.MustWriteByte(ip[1])
+	req.MustWriteByte(ip[2])
+	req.MustWriteByte(ip[3])
+
+	req.MustWriteByte(0) // user id is empty, anonymous proxy only
+
 	if socksType == SOCKS4A {
-		req = append(req, []byte(host+"\x00")...)
+		_, _ = req.WriteString(host)
+		req.MustWriteByte(0)
 	}
 
-	resp, err := cfg.sendReceive(conn, req)
+	resp, err := sesh.sendReceive(conn, req.final())
 	if err != nil {
 		return nil, err
 	} else if len(resp) != 8 {
