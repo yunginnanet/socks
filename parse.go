@@ -14,6 +14,8 @@ type (
 		Host    string
 		Auth    *auth
 		Timeout time.Duration
+		tcpConn *net.TCPConn
+		isTCPc  bool
 		conn    net.Conn
 	}
 	auth struct {

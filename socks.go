@@ -69,6 +69,15 @@ func DialWithConn(proxyURI string, conn net.Conn) func(string, string) (net.Conn
 	return cfg.dialFunc()
 }
 
+func DialTCP(proxyURI string) (net.Conn, error) {
+	cfg, err := parse(proxyURI)
+	if err != nil {
+		return nil, err
+	}
+	cfg.isTCPc = true
+	return cfg.internalDial()
+}
+
 // Dial returns the dial function to be used in http.Transport object.
 // Argument proxyURI should be in the format: "socks5://user:password@127.0.0.1:1080?timeout=5s".
 // The protocol could be socks5, socks4 and socks4a.
@@ -109,6 +118,21 @@ func dialError(err error) func(string, string) (net.Conn, error) {
 
 func (sesh *session) internalDial() (conn net.Conn, err error) {
 	// fmt.Printf("Dialing %s\n", sesh.Host)
+
+	if sesh.isTCPc && sesh.tcpConn == nil {
+		var tcpaddr *net.TCPAddr
+		tcpaddr, err = net.ResolveTCPAddr("tcp", sesh.Host)
+		if err != nil {
+			return nil, err
+		}
+		c, e := net.DialTCP("tcp", nil, tcpaddr)
+		if e != nil {
+			return nil, e
+		}
+		sesh.tcpConn = c
+		return c, nil
+	}
+
 	if sesh.conn == nil {
 		return net.DialTimeout("tcp", sesh.Host, sesh.Timeout)
 	}
