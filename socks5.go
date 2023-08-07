@@ -74,7 +74,12 @@ func (sesh *session) dialSocks5(targetAddr string) (_ net.Conn, err error) {
 	req.MustWriteByte(byte(port >> 8)) // higher byte of destination port
 	req.MustWriteByte(byte(port))      // lower byte of destination port (big endian)
 
-	resp, err = sesh.sendReceive(conn, req.final())
+	resp, err = sesh.sendReceive(conn, req.Bytes())
+
+	defer func() {
+		bufs.MustPut(req.Buffer)
+		req.Buffer = nil
+	}()
 
 	switch {
 	case err != nil:

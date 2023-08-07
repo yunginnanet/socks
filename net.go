@@ -20,11 +20,6 @@ type requestBuilder struct {
 	*pool.Buffer
 }
 
-func (b *requestBuilder) final() []byte {
-	defer bufs.MustPut(b.Buffer)
-	return b.MustBytes()
-}
-
 func (sesh *session) sendReceive(conn net.Conn, req []byte) (resp []byte, err error) {
 	// fmt.Printf("sendReceive: %v->%v\n", conn.LocalAddr(), conn.RemoteAddr())
 	// spew.Dump(req)
